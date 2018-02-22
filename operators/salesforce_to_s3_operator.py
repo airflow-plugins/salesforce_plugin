@@ -24,9 +24,15 @@ class SalesforceBulkQueryToS3Operator(BaseOperator):
     """
     template_fields = ('soql', 's3_key')
 
-    def __init__(self, sf_conn_id, soql, object_type, #sf config
-                 s3_conn_id, s3_bucket, s3_key, #s3 config
-                 *args, **kwargs):
+    def __init__(self,
+                 sf_conn_id,
+                 soql,
+                 object_type,
+                 s3_conn_id,
+                 s3_bucket,
+                 s3_key,
+                 *args,
+                 **kwargs):
 
         super().__init__(*args, **kwargs)
 
@@ -52,36 +58,17 @@ class SalesforceBulkQueryToS3Operator(BaseOperator):
 
 
 class SalesforceToS3Operator(BaseOperator):
-    """
-    Make a query against Salesforce and write the resulting data to a file.
-    """
-    template_fields = ("s3_key",
-                       "query")
-
-    @apply_defaults
-    def __init__(
-        self,
-        sf_conn_id,
-        sf_obj,
-        s3_conn_id,
-        s3_bucket,
-        s3_key,
-        sf_fields=None,
-        fmt="csv",
-        query=None,
-        relationship_object=None,
-        record_time_added=False,
-        coerce_to_timestamp=False,
-        *args,
-        **kwargs
-    ):
         """
-        Initialize the operator
+        Salesforce to S3 Operator
+
+        Makes a query against Salesforce and write the resulting data to a file.
+
         :param sf_conn_id:          Name of the Airflow connection that has
                                     the following information:
                                         - username
                                         - password
                                         - security_token
+        :type sf_conn_id:           string
         :param sf_obj:              Name of the relevant Salesforce object
         :param s3_conn_id:          The destination s3 connection id.
         :type s3_conn_id:           string
@@ -93,46 +80,70 @@ class SalesforceToS3Operator(BaseOperator):
                                     to get from the object.
                                     If *None*, then this will get all fields
                                     for the object
+        :type sf_fields:             list
         :param fmt:                 *(optional)* format that the s3_key of the
                                     data should be in. Possible values include:
                                         - csv
                                         - json
                                         - ndjson
                                     *Default: csv*
+        :type fmt:                  list
         :param query:               *(optional)* A specific query to run for
                                     the given object.  This will override
                                     default query creation.
                                     *Default: None*
+        :type query:                string
         :param relationship_object: *(optional)* Some queries require
                                     relationship objects to work, and
                                     these are not the same names as
                                     the SF object.  Specify that
                                     relationship object here.
                                     *Default: None*
+        :type relationship_object:  string
         :param record_time_added:   *(optional)* True if you want to add a
                                     Unix timestamp field to the resulting data
                                     that marks when the data was
                                     fetched from Salesforce.
                                     *Default: False*.
+        :type record_time_added:    string
         :param coerce_to_timestamp: *(optional)* True if you want to convert
                                     all fields with dates and datetimes
                                     into Unix timestamp (UTC).
                                     *Default: False*.
+        :type coerce_to_timestamp:  string
         """
+        template_fields = ("s3_key",
+                           "query")
 
-        super(SalesforceToS3Operator, self).__init__(*args, **kwargs)
+        @apply_defaults
+        def __init__(self,
+                     sf_conn_id,
+                     sf_obj,
+                     s3_conn_id,
+                     s3_bucket,
+                     s3_key,
+                     sf_fields=None,
+                     fmt="csv",
+                     query=None,
+                     relationship_object=None,
+                     record_time_added=False,
+                     coerce_to_timestamp=False,
+                     *args,
+                     **kwargs):
 
-        self.sf_conn_id = sf_conn_id
-        self.object = sf_obj
-        self.fields = sf_fields
-        self.s3_conn_id = s3_conn_id
-        self.s3_bucket = s3_bucket
-        self.s3_key = s3_key
-        self.fmt = fmt.lower()
-        self.query = query
-        self.relationship_object = relationship_object
-        self.record_time_added = record_time_added
-        self.coerce_to_timestamp = coerce_to_timestamp
+            super(SalesforceToS3Operator, self).__init__(*args, **kwargs)
+
+            self.sf_conn_id = sf_conn_id
+            self.object = sf_obj
+            self.fields = sf_fields
+            self.s3_conn_id = s3_conn_id
+            self.s3_bucket = s3_bucket
+            self.s3_key = s3_key
+            self.fmt = fmt.lower()
+            self.query = query
+            self.relationship_object = relationship_object
+            self.record_time_added = record_time_added
+            self.coerce_to_timestamp = coerce_to_timestamp
 
     def special_query(self, query, sf_hook, relationship_object=None):
         if not query:
