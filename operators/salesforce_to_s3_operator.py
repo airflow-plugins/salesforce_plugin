@@ -6,6 +6,7 @@ from airflow.utils.decorators import apply_defaults
 from airflow.models import BaseOperator
 from airflow.hooks.S3_hook import S3Hook
 
+# from salesforce_plugin.hooks.salesforce_hook import SalesforceHook
 from airflow.contrib.hooks.salesforce_hook import SalesforceHook
 
 
@@ -214,11 +215,11 @@ class SalesforceToS3Operator(BaseOperator):
             # Flush the temp file and upload temp file to S3
             tmp.flush()
 
-            dest_s3 = S3Hook(s3_conn_id=self.s3_conn_id)
+            dest_s3 = S3Hook(self.s3_conn_id)
 
             dest_s3.load_file(
                 filename=tmp.name,
-                key=self.output,
+                key=self.s3_key,
                 bucket_name=self.s3_bucket,
                 replace=True
             )
