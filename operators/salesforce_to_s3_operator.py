@@ -214,11 +214,11 @@ class SalesforceToS3Operator(BaseOperator):
             # Flush the temp file and upload temp file to S3
             tmp.flush()
 
-            dest_s3 = S3Hook(s3_conn_id=self.s3_conn_id)
+            dest_s3 = S3Hook(self.s3_conn_id)
 
             dest_s3.load_file(
                 filename=tmp.name,
-                key=self.output,
+                key=self.s3_key,
                 bucket_name=self.s3_bucket,
                 replace=True
             )

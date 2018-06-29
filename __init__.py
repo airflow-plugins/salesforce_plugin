@@ -1,8 +1,8 @@
 from airflow.plugins_manager import AirflowPlugin
-from hooks.salesforce_hook import SalesforceHook
-from operators.salesforce_schema_to_redshift_operator import SalesforceSchemaToRedshiftOperator
-from operators.salesforce_to_s3_operator import SalesforceBulkQueryToS3Operator
-from operators.salesforce_to_s3_operator import SalesforceToS3Operator
+from salesforce_plugin.hooks.salesforce_hook import SalesforceHook
+from salesforce_plugin.operators.salesforce_schema_to_redshift_operator import SalesforceSchemaToRedshiftOperator
+from salesforce_plugin.operators.salesforce_to_s3_operator import SalesforceBulkQueryToS3Operator
+from salesforce_plugin.operators.salesforce_to_s3_operator import SalesforceToS3Operator
 
 
 class SalesforceToRedshiftPlugin(AirflowPlugin):
