@@ -76,11 +76,6 @@ class SalesforceToS3Operator(BaseOperator):
     :type s3_bucket:            string
     :param s3_key:              The destination s3 key.
     :type s3_key:               string
-    :param sf_fields:           *(optional)* list of fields that you want
-                                to get from the object.
-                                If *None*, then this will get all fields
-                                for the object
-    :type sf_fields:             list
     :param fmt:                 *(optional)* format that the s3_key of the
                                 data should be in. Possible values include:
                                     - csv
@@ -93,6 +88,15 @@ class SalesforceToS3Operator(BaseOperator):
                                 default query creation.
                                 *Default: None*
     :type query:                string
+    :param query_fields:           *(optional)* list of fields that you want
+                                to get from the object.
+                                If *None*, then this will get all fields
+                                for the object
+    :type query_fields:             list
+    :param query_scope:               *(optional)* A specific where clause scoping the query execution
+                                the given object.  This will be appended to the query  with a where clause.
+                                *Default: None*
+    :type query:
     :param relationship_object: *(optional)* Some queries require
                                 relationship objects to work, and
                                 these are not the same names as
@@ -112,8 +116,7 @@ class SalesforceToS3Operator(BaseOperator):
                                 *Default: False*.
     :type coerce_to_timestamp:  string
     """
-    template_fields = ("s3_key",
-                       "query")
+    template_fields = ("s3_key","query","query_fields","query_scope")
 
     @apply_defaults
     def __init__(self,
@@ -122,9 +125,10 @@ class SalesforceToS3Operator(BaseOperator):
                  s3_conn_id,
                  s3_bucket,
                  s3_key,
-                 sf_fields=None,
                  fmt="csv",
                  query=None,
+                 query_fields=None,
+                 query_scope=None,
                  relationship_object=None,
                  record_time_added=False,
                  coerce_to_timestamp=False,
@@ -135,12 +139,13 @@ class SalesforceToS3Operator(BaseOperator):
 
         self.sf_conn_id = sf_conn_id
         self.object = sf_obj
-        self.fields = sf_fields
         self.s3_conn_id = s3_conn_id
         self.s3_bucket = s3_bucket
         self.s3_key = s3_key
         self.fmt = fmt.lower()
         self.query = query
+        self.query_fields = query_fields
+        self.query_scope = query_scope
         self.relationship_object = relationship_object
         self.record_time_added = record_time_added
         self.coerce_to_timestamp = coerce_to_timestamp
@@ -184,28 +189,36 @@ class SalesforceToS3Operator(BaseOperator):
 
             # Get object from Salesforce
             # If fields were not defined, all fields are pulled.
-            if not self.fields:
-                self.fields = hook.get_available_fields(self.object)
+            if not self.query_fields:
+                self.query_fields = hook.get_available_fields(self.object)
 
             logging.info(
                 "Making request for "
-                "{0} fields from {1}".format(len(self.fields), self.object)
+                "{0} fields from {1}".format(len(self.query_fields), self.object)
             )
 
             if self.query:
-                query = self.special_query(self.query,
-                                           hook,
-                                           relationship_object=self.relationship_object
-                                           )
+                self.soql = self.query
             else:
-                query = hook.get_object_from_salesforce(self.object,
-                                                        self.fields)
+                self.soql = "SELECT {fields} FROM {object}".format(fields = ','.join(self.query_fields), object=self.object)
 
-            # output the records from the query to a file
+            if self.query_scope:
+                self.soql += " WHERE {0}".format(self.query_scope)
+
+            logging.debug("query: {0}".format(self.soql))
+
+            result = self.special_query(self.soql,
+                                        hook,
+                                        relationship_object=self.relationship_object
+                                        )
+
+            # output the records from the result to a file
             # the list of records is stored under the "records" key
             logging.info("Writing query results to: {0}".format(tmp.name))
 
-            hook.write_object_to_file(query['records'],
+            empty_set = [{'attributes':None}]
+            result_set = result['records'] if len(result['records'])>0 else empty_set # patching result set to overcome an airflow.contrib hook bug
+            hook.write_object_to_file(result_set,
                                       filename=tmp.name,
                                       fmt=self.fmt,
                                       coerce_to_timestamp=self.coerce_to_timestamp,
@@ -222,8 +235,6 @@ class SalesforceToS3Operator(BaseOperator):
                 bucket_name=self.s3_bucket,
                 replace=True
             )
-
-            dest_s3.connection.close()
 
             tmp.close()
 
