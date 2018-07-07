@@ -1,12 +1,12 @@
 from tempfile import NamedTemporaryFile
 import logging
 import json
-
 from airflow.utils.decorators import apply_defaults
 from airflow.models import BaseOperator
 from airflow.hooks.S3_hook import S3Hook
 
-from airflow.contrib.hooks.salesforce_hook import SalesforceHook
+# from airflow.contrib.hooks.salesforce_hook import SalesforceHook
+from salesforce_plugin.hooks.salesforce_hook import SalesforceYieldingHook
 
 
 class SalesforceBulkQueryToS3Operator(BaseOperator):
@@ -44,7 +44,7 @@ class SalesforceBulkQueryToS3Operator(BaseOperator):
         self.object = object_type[0].upper() + object_type[1:].lower()
 
     def execute(self, context):
-        sf_conn = SalesforceHook(self.sf_conn_id).get_conn()
+        sf_conn = SalesforceYieldingHook(self.sf_conn_id).get_conn()
 
         logging.info(self.soql)
         query_results = sf_conn.bulk.__getattr__(self.object).query(self.soql)
@@ -132,6 +132,7 @@ class SalesforceToS3Operator(BaseOperator):
                  relationship_object=None,
                  record_time_added=False,
                  coerce_to_timestamp=False,
+                 stream=False,
                  *args,
                  **kwargs):
 
@@ -150,21 +151,21 @@ class SalesforceToS3Operator(BaseOperator):
         self.record_time_added = record_time_added
         self.coerce_to_timestamp = coerce_to_timestamp
 
-    def special_query(self, query, sf_hook, relationship_object=None):
-        if not query:
-            raise ValueError("Query is None.  Cannot query nothing")
+    # def special_query(self, query, sf_hook, relationship_object=None):
+    #     if not query:
+    #         raise ValueError("Query is None.  Cannot query nothing")
 
-        sf_hook.sign_in()
+    #     sf_hook.sign_in()
 
-        results = sf_hook.make_query(query)
-        if relationship_object:
-            records = []
-            for r in results['records']:
-                if r.get(relationship_object, None):
-                    records.extend(r[relationship_object]['records'])
-            results['records'] = records
+    #     results = sf_hook.make_query(query)
+    #     if relationship_object:
+    #         records = []
+    #         for r in results['records']:
+    #             if r.get(relationship_object, None):
+    #                 records.extend(r[relationship_object]['records'])
+    #         results['records'] = records
 
-        return results
+    #     return results
 
     def execute(self, context):
         """
@@ -175,10 +176,9 @@ class SalesforceToS3Operator(BaseOperator):
         logging.info("Prepping to gather data from Salesforce")
 
         # Open a name temporary file to store output file until S3 upload
-        with NamedTemporaryFile("w") as tmp:
+        with NamedTemporaryFile("a") as tmp:
 
-            # Load the SalesforceHook
-            hook = SalesforceHook(conn_id=self.sf_conn_id, output=tmp.name)
+            hook = SalesforceYieldingHook(conn_id=self.sf_conn_id, output=tmp.name)
 
             # Attempt to login to Salesforce
             # If this process fails, it will raise an error and die.
@@ -207,25 +207,31 @@ class SalesforceToS3Operator(BaseOperator):
 
             logging.debug("query: {0}".format(self.soql))
 
-            result = self.special_query(self.soql,
-                                        hook,
-                                        relationship_object=self.relationship_object
-                                        )
 
-            # output the records from the result to a file
-            # the list of records is stored under the "records" key
-            logging.info("Writing query results to: {0}".format(tmp.name))
+            for results,schema in hook.yield_all(self.soql, include_deleted=True):
+                if self.relationship_object:
+                    records = []
+                    for r in results['records']:
+                        if r.get(self.relationship_object, None):
+                            records.extend(r[self.relationship_object]['records'])
+                    results['records'] = records
 
-            empty_set = [{'attributes':None}]
-            result_set = result['records'] if len(result['records'])>0 else empty_set # patching result set to overcome an airflow.contrib hook bug
-            hook.write_object_to_file(result_set,
-                                      filename=tmp.name,
-                                      fmt=self.fmt,
-                                      coerce_to_timestamp=self.coerce_to_timestamp,
-                                      record_time_added=self.record_time_added)
+                # output the records from the result to a file
+                # the list of records is stored under the "records" key
+                logging.info("Writing query results to: {0}".format(tmp.name))
 
-            # Flush the temp file and upload temp file to S3
-            tmp.flush()
+                empty_set = [{'attributes':None}]
+                result_set = results['records'] if len(results['records'])>0 else empty_set # patching result set to overcome an airflow.contrib hook bug
+                data = hook.format_results(result_set,
+                                           schema,
+                                           fmt=self.fmt,
+                                           coerce_to_timestamp=self.coerce_to_timestamp,
+                                           record_time_added=self.record_time_added)
+
+                tmp.write(data)
+                tmp.write("\n")
+                # Flush the temp file and upload temp file to S3
+                tmp.flush()
 
             dest_s3 = S3Hook(self.s3_conn_id)
 
