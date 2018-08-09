@@ -4,13 +4,13 @@ from simple_salesforce import Salesforce
 import pandas as pd
 import time
 
+
 class SalesforceYieldingHook(SalesforceHook):
 
-    def __init__( self, conn_id, *args, **kwargs):
-        super(SalesforceYieldingHook, self).__init__(conn_id, *args,**kwargs)
+    def __init__(self, conn_id, *args, **kwargs):
+        super(SalesforceYieldingHook, self).__init__(conn_id, *args, **kwargs)
 
-
-    def yield_all(self, query,include_deleted=False, **kwargs):
+    def yield_all(self, query, include_deleted=False, **kwargs):
         """yield paged results and schema for the `query`. This is a convenience
         wrapper around `query(...)` and `query_more(...)`.
         * query -- the SOQL query to send to Salesforce, e.g.
@@ -19,19 +19,26 @@ class SalesforceYieldingHook(SalesforceHook):
         """
 
         self.log.info("Querying for all objects")
-        result = self.sf.query(query, include_deleted=include_deleted, **kwargs)
+        result = self.sf.query(query,
+                               include_deleted=include_deleted,
+                               **kwargs)
+        if len(result['records']) == 0:
+            return None
         object_name = result['records'][0]['attributes']['type']
         schema = self.describe_object(object_name)
         all_records = []
 
         while True:
-            yield (result,schema)
+            yield (result, schema)
             # fetch next batch if we're not done else break out of loop
             if not result['done']:
-                result = self.sf.query_more(result['nextRecordsUrl'], identifier_is_url=True, include_deleted=include_deleted)
+                result = self.sf.query_more(
+                    result['nextRecordsUrl'],
+                    identifier_is_url=True,
+                    include_deleted=include_deleted)
             else:
                 break
-        None
+        return None
 
     def format_results(
         self,
@@ -67,7 +74,6 @@ class SalesforceYieldingHook(SalesforceHook):
             object_name = query_results[0]['attributes']['type']
 
             self.log.info("Coercing timestamps for: %s", object_name)
-
 
             # possible columns that can be convereted to timestamps
             # are the ones that are either date or datetime types
@@ -114,4 +120,3 @@ class SalesforceYieldingHook(SalesforceHook):
             return df.to_json(orient="records", date_unit="s")
         elif fmt == "ndjson":
             return df.to_json(orient="records", lines=True, date_unit="s")
-
