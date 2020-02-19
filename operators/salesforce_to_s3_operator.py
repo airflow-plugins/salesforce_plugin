@@ -223,8 +223,6 @@ class SalesforceToS3Operator(BaseOperator):
                 replace=True
             )
 
-            dest_s3.connection.close()
-
             tmp.close()
 
         logging.info("Query finished!")
