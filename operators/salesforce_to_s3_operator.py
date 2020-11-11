@@ -6,7 +6,6 @@ from airflow.utils.decorators import apply_defaults
 from airflow.models import BaseOperator
 from airflow.hooks.S3_hook import S3Hook
 
-# from ..hooks.salesforce_hook import SalesforceHook
 from airflow.providers.salesforce.hooks.salesforce import SalesforceHook
 
 
