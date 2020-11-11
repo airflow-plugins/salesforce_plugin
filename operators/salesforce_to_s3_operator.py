@@ -6,7 +6,8 @@ from airflow.utils.decorators import apply_defaults
 from airflow.models import BaseOperator
 from airflow.hooks.S3_hook import S3Hook
 
-from airflow.contrib.hooks.salesforce_hook import SalesforceHook
+# from ..hooks.salesforce_hook import SalesforceHook
+from airflow.providers.salesforce.hooks.salesforce import SalesforceHook
 
 
 class SalesforceBulkQueryToS3Operator(BaseOperator):
@@ -173,7 +174,7 @@ class SalesforceToS3Operator(BaseOperator):
         with NamedTemporaryFile("w") as tmp:
 
             # Load the SalesforceHook
-            hook = SalesforceHook(conn_id=self.sf_conn_id, output=tmp.name)
+            hook = SalesforceHook(conn_id=self.sf_conn_id)
 
             # Attempt to login to Salesforce
             # If this process fails, it will raise an error and die.
